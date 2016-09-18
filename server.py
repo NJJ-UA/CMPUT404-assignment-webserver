@@ -1,5 +1,6 @@
 #  coding: utf-8 
 import SocketServer
+import os
 
 # Copyright 2013 Abram Hindle, Eddie Antonio Santos
 # 
@@ -26,14 +27,53 @@ import SocketServer
 
 # try: curl -v -X GET http://127.0.0.1:8080/
 
+RESPONSE_CODE={200:"OK",404:"NOT FOUND"}
 
+MIME_TYPE={"html":"text/html","css":"text/css"}
+
+ERROR_PATH=os.path.abspath("error.html")
 class MyWebServer(SocketServer.BaseRequestHandler):
     
     def handle(self):
         self.data = self.request.recv(1024).strip()
-        print ("Got a request of: %s\n" % self.data)
-        self.request.sendall("OK")
+        method,dir=self.headerhandle(self.data)
+        method_func=getattr(self,method)
+        method_func(dir)
+    
+        
 
+
+    def headerhandle(self, data):
+        header=data.split('\r\n')[0]
+        method,dir,version=header.split(' ')
+        return method.lower(),dir
+
+    def get(self,dir):
+        absdir=os.path.abspath(dir)
+        abspath=os.path.abspath("./www"+absdir)
+        print(abspath)
+        if os.path.exists(abspath):
+            if os.path.isfile(abspath):
+                self.response(200,abspath)
+            else:
+                abspath=os.path.abspath(abspath+"/index.html")
+                self.response(200,abspath)
+        else:
+            self.response(404,ERROR_PATH)
+
+    def response(self,code,path):
+        file = open(path, 'r')
+        body = file.read()
+        mime_type=MIME_TYPE[path.split('.')[-1].lower()]
+        response = "HTTP/1.1 %d %s \r\n" %(code,RESPONSE_CODE[code])
+        response += "Content-Length: %d \r\n" % len(body)
+        response += "Content-Type: %s \r\n" % mime_type
+        response += "Connection: close \r\n\r\n"
+        response += body+ "\r\n"
+        self.request.sendall(response)
+        
+   
+    
 if __name__ == "__main__":
     HOST, PORT = "localhost", 8080
 
