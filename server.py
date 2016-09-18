@@ -27,11 +27,12 @@ import os
 
 # try: curl -v -X GET http://127.0.0.1:8080/
 
-RESPONSE_CODE={200:"OK",404:"NOT FOUND"}
+RESPONSE_CODE={200:"OK",302:"FOUND",404:"NOT FOUND"}
 
 MIME_TYPE={"html":"text/html","css":"text/css"}
 
 ERROR_PATH=os.path.abspath("error.html")
+
 class MyWebServer(SocketServer.BaseRequestHandler):
     
     def handle(self):
@@ -41,27 +42,35 @@ class MyWebServer(SocketServer.BaseRequestHandler):
         method_func(dir)
     
         
-
-
     def headerhandle(self, data):
-        header=data.split('\r\n')[0]
+        requestdata=data.split('\r\n')
+        header=requestdata[0]
+        for line in requestdata:
+            #print(line)
+            if line.startswith("Host:"):
+                self.host=line[5:].strip()
+                #print("*************"+self.host)
+        #print(header)
         method,dir,version=header.split(' ')
         return method.lower(),dir
 
     def get(self,dir):
         absdir=os.path.abspath(dir)
         abspath=os.path.abspath("./www"+absdir)
-        print(abspath)
         if os.path.exists(abspath):
             if os.path.isfile(abspath):
                 self.response(200,abspath)
             else:
-                abspath=os.path.abspath(abspath+"/index.html")
-                self.response(200,abspath)
+                if dir[-1]==('/'):
+                    abspath=os.path.abspath(abspath+"/index.html")
+                    self.response(200,abspath)
+                else:
+                    self.redirect(302,dir)
         else:
             self.response(404,ERROR_PATH)
 
     def response(self,code,path):
+        #print("-----------"+path)
         file = open(path, 'r')
         body = file.read()
         mime_type=MIME_TYPE[path.split('.')[-1].lower()]
@@ -70,6 +79,12 @@ class MyWebServer(SocketServer.BaseRequestHandler):
         response += "Content-Type: %s \r\n" % mime_type
         response += "Connection: close \r\n\r\n"
         response += body+ "\r\n"
+        self.request.sendall(response)
+        
+    def redirect(self,code,path):
+        red_path=path+"/"
+        response = "HTTP/1.1 %d %s \r\n" % (code, RESPONSE_CODE[code])
+        response += "Location: %s \r\n\r\n" % red_path
         self.request.sendall(response)
         
    
